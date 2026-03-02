@@ -1,0 +1,134 @@
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle token refresh
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          const response = await axios.post(`${API_URL}/auth/refresh-token`, {
+            refreshToken,
+          });
+
+          const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', newRefreshToken);
+
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Auth API
+export const authAPI = {
+  setup: (data) => api.post('/auth/setup', data),
+  login: (data) => api.post('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
+  getMe: () => api.get('/auth/me'),
+  changePassword: (data) => api.put('/auth/change-password', data),
+  resetPassword: (userId, data) => api.put(`/auth/reset-password/${userId}`, data),
+};
+
+// Staff API
+export const staffAPI = {
+  getAll: (params) => api.get('/staff', { params }),
+  getOne: (id) => api.get(`/staff/${id}`),
+  create: (data) => api.post('/staff', data),
+  update: (id, data) => api.put(`/staff/${id}`, data),
+  transfer: (id, data) => api.put(`/staff/${id}/transfer`, data),
+  deactivate: (id) => api.delete(`/staff/${id}`),
+  reactivate: (id) => api.put(`/staff/${id}/reactivate`),
+};
+
+// Product API
+export const productAPI = {
+  getAll: (params) => api.get('/products', { params }),
+  getOne: (id) => api.get(`/products/${id}`),
+  create: (data) => api.post('/products', data),
+  update: (id, data) => api.put(`/products/${id}`, data),
+  deactivate: (id) => api.delete(`/products/${id}`),
+  reactivate: (id) => api.put(`/products/${id}/reactivate`),
+  getLowStock: (params) => api.get('/products/low-stock', { params }),
+};
+
+// Sales API
+export const salesAPI = {
+  getAll: (params) => api.get('/sales', { params }),
+  getOne: (id) => api.get(`/sales/${id}`),
+  getByNumber: (saleNumber) => api.get(`/sales/number/${saleNumber}`),
+  create: (data) => api.post('/sales', data),
+  getMySummary: (params) => api.get('/sales/my-summary', { params }),
+};
+
+// Refund API
+export const refundAPI = {
+  getAll: (params) => api.get('/sales/refunds/all', { params }),
+  getPending: () => api.get('/sales/refunds/pending'),
+  getOne: (id) => api.get(`/sales/refunds/${id}`),
+  create: (data) => api.post('/sales/refunds', data),
+  approve: (id) => api.put(`/sales/refunds/${id}/approve`),
+  reject: (id, data) => api.put(`/sales/refunds/${id}/reject`, data),
+};
+
+// Stock API
+export const stockAPI = {
+  getOverview: (params) => api.get('/stock', { params }),
+  addStock: (productId, data) => api.post(`/stock/${productId}/add`, data),
+  removeStock: (productId, data) => api.post(`/stock/${productId}/remove`, data),
+  adjustStock: (productId, data) => api.post(`/stock/${productId}/adjust`, data),
+  getProductLogs: (productId, params) => api.get(`/stock/${productId}/logs`, { params }),
+  getAllLogs: (params) => api.get('/stock/logs', { params }),
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  getSummary: () => api.get('/dashboard/summary'),
+  getSalesReport: (params) => api.get('/dashboard/sales-report', { params }),
+  getStaffPerformance: (params) => api.get('/dashboard/staff-performance', { params }),
+  getLowStockAlerts: () => api.get('/dashboard/low-stock'),
+  getRecentActivity: (params) => api.get('/dashboard/recent-activity', { params }),
+  getRefundStats: (params) => api.get('/dashboard/refund-stats', { params }),
+};
+
+export default api;
