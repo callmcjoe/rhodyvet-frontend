@@ -6,8 +6,9 @@ import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
-import { DEPARTMENTS, PAYMENT_METHODS } from '../../utils/constants';
+import { DEPARTMENTS, PAYMENT_METHODS, DISCOUNT_PER_BAG, MIN_BAGS_FOR_AUTO_DISCOUNT } from '../../utils/constants';
 import { formatCurrency, calculateFeedTotal, getDepartmentBadgeColor } from '../../utils/helpers';
+import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   MagnifyingGlassIcon,
@@ -15,6 +16,7 @@ import {
   MinusIcon,
   TrashIcon,
   ShoppingCartIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline';
 
 const PointOfSale = () => {
@@ -28,6 +30,13 @@ const PointOfSale = () => {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [processing, setProcessing] = useState(false);
+
+  // Discount state
+  const [manualDiscount, setManualDiscount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [isDiscountRequestOpen, setIsDiscountRequestOpen] = useState(false);
+
+  const { user, isAdmin } = useAuth();
 
   useEffect(() => {
     fetchProducts();
@@ -57,6 +66,12 @@ const PointOfSale = () => {
         updateCartQuantity(product._id, existingItem.quantity + 1);
       }
     } else {
+      // Determine default sale unit for store products
+      let defaultSaleUnit = null;
+      if (product.unitType === 'quantity' && product.saleUnits && product.saleUnits.length > 0) {
+        defaultSaleUnit = product.saleUnits[0];
+      }
+
       const newItem = {
         product,
         productId: product._id,
@@ -68,9 +83,21 @@ const PointOfSale = () => {
         quantityHalfPaints: 0,
         // For store
         quantity: product.unitType === 'quantity' ? 1 : 0,
+        // Selected sale unit for store products
+        selectedSaleUnit: defaultSaleUnit,
       };
       setCart([...cart, newItem]);
     }
+  };
+
+  const updateSaleUnit = (productId, saleUnitName) => {
+    setCart(cart.map(item => {
+      if (item.product._id === productId) {
+        const saleUnit = item.product.saleUnits?.find(u => u.name === saleUnitName);
+        return { ...item, selectedSaleUnit: saleUnit };
+      }
+      return item;
+    }));
   };
 
   const updateCartQuantity = (productId, newQuantity) => {
@@ -108,10 +135,39 @@ const PointOfSale = () => {
         quantityHalfPaints: item.quantityHalfPaints,
       }, item.product);
     }
-    return item.quantity * item.product.pricePerUnit;
+    // For store products with sale units
+    if (item.selectedSaleUnit) {
+      return item.quantity * item.selectedSaleUnit.price;
+    }
+    // Fallback to legacy pricePerUnit
+    return item.quantity * (item.product.pricePerUnit || 0);
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+  const cartSubtotal = cart.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+
+  // Calculate total bags in cart
+  const totalBags = cart.reduce((sum, item) => {
+    if (item.product.unitType === 'bag') {
+      return sum + (item.quantityBags || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Calculate automatic discount (applies when >= 10 bags)
+  const autoDiscount = totalBags >= MIN_BAGS_FOR_AUTO_DISCOUNT
+    ? totalBags * DISCOUNT_PER_BAG
+    : 0;
+
+  // Manual discount (admin only)
+  const manualDiscountAmount = isAdmin() && manualDiscount ? parseFloat(manualDiscount) || 0 : 0;
+
+  // Use manual discount if set by admin, otherwise use automatic
+  const discountAmount = manualDiscountAmount > 0 ? manualDiscountAmount : autoDiscount;
+  const discountType = manualDiscountAmount > 0 ? 'manual' : (autoDiscount > 0 ? 'automatic' : 'none');
+
+  // Ensure discount doesn't exceed subtotal
+  const finalDiscount = Math.min(discountAmount, cartSubtotal);
+  const cartTotal = cartSubtotal - finalDiscount;
 
   const isCartValid = () => {
     return cart.length > 0 && cart.every(item => {
@@ -141,18 +197,80 @@ const PointOfSale = () => {
           quantityThirdBags: item.quantityThirdBags,
           quantityPaints: item.quantityPaints,
           quantityHalfPaints: item.quantityHalfPaints,
+          // Include sale unit info for store products
+          saleUnitName: item.selectedSaleUnit?.name,
+          saleUnitPrice: item.selectedSaleUnit?.price,
+          saleUnitEquivalent: item.selectedSaleUnit?.equivalent,
         })),
         paymentMethod,
       };
 
+      // Add manual discount if admin
+      if (isAdmin() && manualDiscountAmount > 0) {
+        saleData.manualDiscount = manualDiscountAmount;
+        saleData.discountReason = discountReason || 'Manual discount by admin';
+      }
+
       const response = await salesAPI.create(saleData);
       setLastSale(response.data.data);
       setCart([]);
+      setManualDiscount('');
+      setDiscountReason('');
       setIsCheckoutOpen(false);
       setIsReceiptOpen(true);
       toast.success('Sale completed successfully!');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Sale failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Handle discount request (for sales rep)
+  const handleDiscountRequest = async () => {
+    if (!isCartValid()) {
+      toast.error('Please add quantities to all items');
+      return;
+    }
+
+    if (!manualDiscount || parseFloat(manualDiscount) <= 0) {
+      toast.error('Please enter a discount amount');
+      return;
+    }
+
+    if (!discountReason) {
+      toast.error('Please provide a reason for the discount');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const requestData = {
+        items: cart.map(item => ({
+          productId: item.product._id,
+          quantity: item.quantity,
+          quantityBags: item.quantityBags,
+          quantityHalfBags: item.quantityHalfBags,
+          quantityThirdBags: item.quantityThirdBags,
+          quantityPaints: item.quantityPaints,
+          quantityHalfPaints: item.quantityHalfPaints,
+          saleUnitName: item.selectedSaleUnit?.name,
+          saleUnitPrice: item.selectedSaleUnit?.price,
+          saleUnitEquivalent: item.selectedSaleUnit?.equivalent,
+        })),
+        paymentMethod,
+        discountAmount: parseFloat(manualDiscount),
+        discountReason,
+      };
+
+      await salesAPI.requestDiscount(requestData);
+      setCart([]);
+      setManualDiscount('');
+      setDiscountReason('');
+      setIsDiscountRequestOpen(false);
+      toast.success('Discount request submitted for admin approval');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to submit discount request');
     } finally {
       setProcessing(false);
     }
@@ -207,7 +325,9 @@ const PointOfSale = () => {
                 <p className="text-primary-600 font-semibold mt-1">
                   {product.unitType === 'bag'
                     ? formatCurrency(product.pricePerBag)
-                    : formatCurrency(product.pricePerUnit)}
+                    : product.saleUnits && product.saleUnits.length > 0
+                      ? `${formatCurrency(product.saleUnits[0].price)}/${product.saleUnits[0].name}`
+                      : formatCurrency(product.pricePerUnit)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">{product.stockDisplay}</p>
               </div>
@@ -247,23 +367,44 @@ const PointOfSale = () => {
                 </div>
 
                 {item.product.unitType === 'quantity' ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => updateCartQuantity(item.product._id, item.quantity - 1)}
-                        className="p-1 rounded bg-gray-100 hover:bg-gray-200"
+                  <div className="space-y-2">
+                    {/* Sale Unit Selector */}
+                    {item.product.saleUnits && item.product.saleUnits.length > 0 && (
+                      <select
+                        value={item.selectedSaleUnit?.name || ''}
+                        onChange={(e) => updateSaleUnit(item.product._id, e.target.value)}
+                        className="input py-1 text-sm w-full"
                       >
-                        <MinusIcon className="h-4 w-4" />
-                      </button>
-                      <span className="w-8 text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => updateCartQuantity(item.product._id, item.quantity + 1)}
-                        className="p-1 rounded bg-gray-100 hover:bg-gray-200"
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </button>
+                        {item.product.saleUnits.map((unit, idx) => (
+                          <option key={idx} value={unit.name}>
+                            {unit.name} - {formatCurrency(unit.price)} ({unit.equivalent} {item.product.baseUnit})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => updateCartQuantity(item.product._id, item.quantity - 1)}
+                          className="p-1 rounded bg-gray-100 hover:bg-gray-200"
+                        >
+                          <MinusIcon className="h-4 w-4" />
+                        </button>
+                        <span className="w-8 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartQuantity(item.product._id, item.quantity + 1)}
+                          className="p-1 rounded bg-gray-100 hover:bg-gray-200"
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="font-semibold">{formatCurrency(calculateItemTotal(item))}</p>
                     </div>
-                    <p className="font-semibold">{formatCurrency(calculateItemTotal(item))}</p>
+                    {item.selectedSaleUnit && (
+                      <p className="text-xs text-gray-500">
+                        = {item.quantity * item.selectedSaleUnit.equivalent} {item.product.baseUnit}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm">
@@ -327,11 +468,47 @@ const PointOfSale = () => {
           )}
         </div>
 
-        <div className="p-4 border-t space-y-4">
-          <div className="flex justify-between text-lg font-semibold">
+        <div className="p-4 border-t space-y-3">
+          {/* Total Bags Info */}
+          {totalBags > 0 && (
+            <div className="text-sm text-gray-600">
+              Total Bags: <span className="font-medium">{totalBags}</span>
+              {totalBags >= MIN_BAGS_FOR_AUTO_DISCOUNT && (
+                <span className="text-green-600 ml-2">(Discount applies!)</span>
+              )}
+            </div>
+          )}
+
+          {/* Subtotal */}
+          <div className="flex justify-between text-sm">
+            <span>Subtotal:</span>
+            <span>{formatCurrency(cartSubtotal)}</span>
+          </div>
+
+          {/* Discount Display */}
+          {finalDiscount > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span className="flex items-center">
+                <TicketIcon className="h-4 w-4 mr-1" />
+                Discount ({discountType}):
+              </span>
+              <span>-{formatCurrency(finalDiscount)}</span>
+            </div>
+          )}
+
+          {/* Auto Discount Info */}
+          {autoDiscount > 0 && discountType === 'automatic' && (
+            <p className="text-xs text-green-600">
+              ₦{DISCOUNT_PER_BAG} × {totalBags} bags = ₦{autoDiscount} off
+            </p>
+          )}
+
+          {/* Total */}
+          <div className="flex justify-between text-lg font-semibold pt-2 border-t">
             <span>Total:</span>
             <span>{formatCurrency(cartTotal)}</span>
           </div>
+
           <Button
             fullWidth
             disabled={!isCartValid()}
@@ -339,6 +516,18 @@ const PointOfSale = () => {
           >
             Checkout
           </Button>
+
+          {/* Request Discount Button (for sales rep when no auto discount applies) */}
+          {!isAdmin() && totalBags < MIN_BAGS_FOR_AUTO_DISCOUNT && cart.length > 0 && (
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => setIsDiscountRequestOpen(true)}
+            >
+              <TicketIcon className="h-4 w-4 mr-2" />
+              Request Discount
+            </Button>
+          )}
         </div>
       </div>
 
@@ -350,10 +539,58 @@ const PointOfSale = () => {
         size="sm"
       >
         <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600">Total Amount</p>
-            <p className="text-2xl font-bold text-primary-600">{formatCurrency(cartTotal)}</p>
+          {/* Order Summary */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal:</span>
+              <span>{formatCurrency(cartSubtotal)}</span>
+            </div>
+            {totalBags > 0 && (
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Total Bags:</span>
+                <span>{totalBags}</span>
+              </div>
+            )}
+            {finalDiscount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Discount ({discountType}):</span>
+                <span>-{formatCurrency(finalDiscount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-lg pt-2 border-t">
+              <span>Total:</span>
+              <span className="text-primary-600">{formatCurrency(cartTotal)}</span>
+            </div>
           </div>
+
+          {/* Auto Discount Info */}
+          {autoDiscount > 0 && discountType === 'automatic' && (
+            <div className="bg-green-50 text-green-700 rounded-lg p-3 text-sm">
+              <p className="font-medium">Automatic Discount Applied!</p>
+              <p>₦{DISCOUNT_PER_BAG} × {totalBags} bags = ₦{autoDiscount} off</p>
+            </div>
+          )}
+
+          {/* Manual Discount (Admin Only) */}
+          {isAdmin() && (
+            <div className="border rounded-lg p-3 space-y-2">
+              <p className="text-sm font-medium text-gray-700">Manual Discount (Admin)</p>
+              <Input
+                type="number"
+                placeholder="Discount amount"
+                value={manualDiscount}
+                onChange={(e) => setManualDiscount(e.target.value)}
+                min="0"
+              />
+              {manualDiscount && parseFloat(manualDiscount) > 0 && (
+                <Input
+                  placeholder="Reason for discount"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                />
+              )}
+            </div>
+          )}
 
           <Select
             label="Payment Method"
@@ -376,6 +613,84 @@ const PointOfSale = () => {
               loading={processing}
             >
               Confirm Sale
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Discount Request Modal (Sales Rep) */}
+      <Modal
+        isOpen={isDiscountRequestOpen}
+        onClose={() => setIsDiscountRequestOpen(false)}
+        title="Request Discount Approval"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="bg-yellow-50 text-yellow-700 rounded-lg p-3 text-sm">
+            <p>Since this sale has fewer than {MIN_BAGS_FOR_AUTO_DISCOUNT} bags, you need admin approval for a discount.</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal:</span>
+              <span>{formatCurrency(cartSubtotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Total Bags:</span>
+              <span>{totalBags}</span>
+            </div>
+          </div>
+
+          <Input
+            label="Discount Amount (₦)"
+            type="number"
+            placeholder="Enter discount amount"
+            value={manualDiscount}
+            onChange={(e) => setManualDiscount(e.target.value)}
+            min="0"
+            required
+          />
+
+          <Input
+            label="Reason for Discount"
+            placeholder="Why should this discount be approved?"
+            value={discountReason}
+            onChange={(e) => setDiscountReason(e.target.value)}
+            required
+          />
+
+          {manualDiscount && parseFloat(manualDiscount) > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="flex justify-between font-medium">
+                <span>Final Amount (if approved):</span>
+                <span className="text-primary-600">
+                  {formatCurrency(cartSubtotal - (parseFloat(manualDiscount) || 0))}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <Select
+            label="Payment Method"
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            options={PAYMENT_METHODS}
+          />
+
+          <div className="flex space-x-3 pt-4">
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => setIsDiscountRequestOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              fullWidth
+              onClick={handleDiscountRequest}
+              loading={processing}
+            >
+              Submit for Approval
             </Button>
           </div>
         </div>
@@ -404,8 +719,25 @@ const PointOfSale = () => {
               ))}
             </div>
 
-            <div className="border-t pt-4">
-              <div className="flex justify-between font-bold text-lg">
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span>{formatCurrency(lastSale.subtotalAmount)}</span>
+              </div>
+
+              {lastSale.discountAmount > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount ({lastSale.discountType}):</span>
+                    <span>-{formatCurrency(lastSale.discountAmount)}</span>
+                  </div>
+                  {lastSale.discountReason && (
+                    <p className="text-xs text-gray-500">{lastSale.discountReason}</p>
+                  )}
+                </>
+              )}
+
+              <div className="flex justify-between font-bold text-lg pt-2 border-t">
                 <span>Total</span>
                 <span>{formatCurrency(lastSale.totalAmount)}</span>
               </div>

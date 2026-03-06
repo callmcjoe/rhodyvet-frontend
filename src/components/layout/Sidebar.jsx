@@ -7,15 +7,21 @@ import {
   ArrowPathIcon,
   ChartBarIcon,
   ArchiveBoxIcon,
+  TicketIcon,
+  HeartIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, adminOnly: true },
   { name: 'Staff', href: '/staff', icon: UsersIcon, adminOnly: true },
+  { name: 'Treatments', href: '/treatments', icon: HeartIcon, adminOnly: true },
+  { name: 'Chicken', href: '/chicken', icon: SparklesIcon, adminOnly: true },
   { name: 'Products', href: '/products', icon: CubeIcon, adminOnly: false },
   { name: 'Point of Sale', href: '/pos', icon: ShoppingCartIcon, adminOnly: false },
   { name: 'Sales', href: '/sales', icon: ChartBarIcon, adminOnly: false },
+  { name: 'Discounts', href: '/discount-requests', icon: TicketIcon, adminOnly: true },
   { name: 'Refunds', href: '/refunds', icon: ArrowPathIcon, adminOnly: false },
   { name: 'Stock', href: '/stock', icon: ArchiveBoxIcon, adminOnly: true },
 ];

@@ -11,7 +11,7 @@ import { DEPARTMENTS } from '../../utils/constants';
 import { formatCurrency, getDepartmentBadgeColor } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -36,7 +36,12 @@ const ProductList = () => {
     stockBags: '',
     stockInQuantity: '',
     lowStockThreshold: '10',
+    baseUnit: '',
+    stockUnit: '',
+    stockUnitEquivalent: '',
+    initialStockInStockUnits: '',
   });
+  const [saleUnits, setSaleUnits] = useState([{ name: '', price: '', equivalent: '' }]);
 
   const { isAdmin } = useAuth();
 
@@ -74,6 +79,8 @@ const ProductList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const stockInPaintsValue = bagsToTotalPaints();
+
       const data = {
         ...formData,
         pricePerBag: formData.pricePerBag ? parseFloat(formData.pricePerBag) : undefined,
@@ -82,12 +89,27 @@ const ProductList = () => {
         pricePerPaint: formData.pricePerPaint ? parseFloat(formData.pricePerPaint) : undefined,
         pricePerHalfPaint: formData.pricePerHalfPaint ? parseFloat(formData.pricePerHalfPaint) : undefined,
         pricePerUnit: formData.pricePerUnit ? parseFloat(formData.pricePerUnit) : undefined,
-        stockInPaints: bagsToTotalPaints(),
-        stockInQuantity: formData.stockInQuantity ? parseInt(formData.stockInQuantity) : 0,
+        stockInPaints: stockInPaintsValue,
+        stockInQuantity: formData.stockInQuantity ? parseFloat(formData.stockInQuantity) : 0,
         lowStockThreshold: parseInt(formData.lowStockThreshold) || 10,
       };
       // Remove the bags field before sending (we convert to paints)
       delete data.stockBags;
+
+      // For store products, add baseUnit, stockUnit, and saleUnits
+      if (formData.unitType === 'quantity') {
+        data.baseUnit = formData.baseUnit;
+        data.stockUnit = formData.stockUnit;
+        data.stockUnitEquivalent = formData.stockUnitEquivalent ? parseFloat(formData.stockUnitEquivalent) : undefined;
+        data.initialStockInStockUnits = formData.initialStockInStockUnits ? parseFloat(formData.initialStockInStockUnits) : undefined;
+        data.saleUnits = saleUnits
+          .filter(u => u.name && u.price && u.equivalent)
+          .map(u => ({
+            name: u.name,
+            price: parseFloat(u.price),
+            equivalent: parseFloat(u.equivalent)
+          }));
+      }
 
       if (selectedProduct) {
         await productAPI.update(selectedProduct._id, data);
@@ -141,7 +163,21 @@ const ProductList = () => {
       stockBags: '',
       stockInQuantity: '',
       lowStockThreshold: product.lowStockThreshold?.toString() || '10',
+      baseUnit: product.baseUnit || '',
+      stockUnit: product.stockUnit || '',
+      stockUnitEquivalent: product.stockUnitEquivalent?.toString() || '',
+      initialStockInStockUnits: '',
     });
+    // Load existing sale units for store products
+    if (product.saleUnits && product.saleUnits.length > 0) {
+      setSaleUnits(product.saleUnits.map(u => ({
+        name: u.name,
+        price: u.price?.toString() || '',
+        equivalent: u.equivalent?.toString() || ''
+      })));
+    } else {
+      setSaleUnits([{ name: '', price: '', equivalent: '' }]);
+    }
     setIsModalOpen(true);
   };
 
@@ -161,7 +197,28 @@ const ProductList = () => {
       stockBags: '',
       stockInQuantity: '',
       lowStockThreshold: '10',
+      baseUnit: '',
+      stockUnit: '',
+      stockUnitEquivalent: '',
+      initialStockInStockUnits: '',
     });
+    setSaleUnits([{ name: '', price: '', equivalent: '' }]);
+  };
+
+  const addSaleUnit = () => {
+    setSaleUnits([...saleUnits, { name: '', price: '', equivalent: '' }]);
+  };
+
+  const removeSaleUnit = (index) => {
+    if (saleUnits.length > 1) {
+      setSaleUnits(saleUnits.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateSaleUnit = (index, field, value) => {
+    const updated = [...saleUnits];
+    updated[index][field] = value;
+    setSaleUnits(updated);
   };
 
   const columns = [
@@ -195,6 +252,13 @@ const ProductList = () => {
             <>
               {row.pricePerBag && <p>Bag: {formatCurrency(row.pricePerBag)}</p>}
               {row.pricePerPaint && <p>Paint: {formatCurrency(row.pricePerPaint)}</p>}
+            </>
+          ) : row.saleUnits && row.saleUnits.length > 0 ? (
+            <>
+              {row.saleUnits.slice(0, 2).map((u, i) => (
+                <p key={i}>{u.name}: {formatCurrency(u.price)}</p>
+              ))}
+              {row.saleUnits.length > 2 && <p className="text-gray-400">+{row.saleUnits.length - 2} more</p>}
             </>
           ) : (
             <p>Unit: {formatCurrency(row.pricePerUnit)}</p>
@@ -392,24 +456,105 @@ const ProductList = () => {
 
           {formData.unitType === 'quantity' && (
             <div className="space-y-4">
-              <Input
-                label="Price per Unit"
-                name="pricePerUnit"
-                type="number"
-                step="0.01"
-                value={formData.pricePerUnit}
-                onChange={(e) => setFormData({ ...formData, pricePerUnit: e.target.value })}
-                required
-              />
-              {!selectedProduct && (
+              <p className="text-sm font-medium text-gray-700">Stock Configuration</p>
+              <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Initial Stock (Quantity)"
-                  name="stockInQuantity"
-                  type="number"
-                  value={formData.stockInQuantity}
-                  onChange={(e) => setFormData({ ...formData, stockInQuantity: e.target.value })}
+                  label="Base Unit (smallest unit for calculations)"
+                  name="baseUnit"
+                  placeholder="e.g., kg, tablet, ml"
+                  value={formData.baseUnit}
+                  onChange={(e) => setFormData({ ...formData, baseUnit: e.target.value })}
+                  required
                 />
+                <Input
+                  label="Stock Display Unit (how stock is shown)"
+                  name="stockUnit"
+                  placeholder="e.g., bag, pack, bottle"
+                  value={formData.stockUnit}
+                  onChange={(e) => setFormData({ ...formData, stockUnit: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label={`How many ${formData.baseUnit || 'base units'} in 1 ${formData.stockUnit || 'stock unit'}?`}
+                  name="stockUnitEquivalent"
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g., 25 (if 1 bag = 25 kg)"
+                  value={formData.stockUnitEquivalent}
+                  onChange={(e) => setFormData({ ...formData, stockUnitEquivalent: e.target.value })}
+                  required
+                />
+                {!selectedProduct && (
+                  <Input
+                    label={`Initial Stock (in ${formData.stockUnit || 'stock units'})`}
+                    name="initialStockInStockUnits"
+                    type="number"
+                    step="0.01"
+                    placeholder={`e.g., 10 ${formData.stockUnit || 'units'}`}
+                    value={formData.initialStockInStockUnits}
+                    onChange={(e) => setFormData({ ...formData, initialStockInStockUnits: e.target.value })}
+                  />
+                )}
+              </div>
+              {formData.baseUnit && formData.stockUnit && formData.stockUnitEquivalent && formData.initialStockInStockUnits && (
+                <p className="text-sm text-gray-500">
+                  Total: {parseFloat(formData.initialStockInStockUnits) * parseFloat(formData.stockUnitEquivalent)} {formData.baseUnit}
+                  ({formData.initialStockInStockUnits} {formData.stockUnit} × {formData.stockUnitEquivalent} {formData.baseUnit})
+                </p>
               )}
+
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-sm font-medium text-gray-700">Sale Units</p>
+                  <Button type="button" variant="secondary" size="sm" onClick={addSaleUnit}>
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Unit
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  Define how this product can be sold. Each sale unit has a name, price, and how many {formData.baseUnit || 'base units'} it equals.
+                </p>
+
+                {saleUnits.map((unit, index) => (
+                  <div key={index} className="grid grid-cols-4 gap-2 mb-2 items-end">
+                    <Input
+                      label={index === 0 ? "Unit Name" : ""}
+                      placeholder="e.g., bag, kg, tablet"
+                      value={unit.name}
+                      onChange={(e) => updateSaleUnit(index, 'name', e.target.value)}
+                      required
+                    />
+                    <Input
+                      label={index === 0 ? "Price (₦)" : ""}
+                      type="number"
+                      step="0.01"
+                      placeholder="Price"
+                      value={unit.price}
+                      onChange={(e) => updateSaleUnit(index, 'price', e.target.value)}
+                      required
+                    />
+                    <Input
+                      label={index === 0 ? `Equals (${formData.baseUnit || 'base units'})` : ""}
+                      type="number"
+                      step="0.01"
+                      placeholder="Equivalent"
+                      value={unit.equivalent}
+                      onChange={(e) => updateSaleUnit(index, 'equivalent', e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSaleUnit(index)}
+                      className="text-red-500 hover:text-red-700 p-2"
+                      disabled={saleUnits.length === 1}
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -11,9 +11,13 @@ import Setup from './pages/auth/Setup';
 // Main Pages
 import Dashboard from './pages/dashboard/Dashboard';
 import StaffList from './pages/staff/StaffList';
+import ClientList from './pages/clients/ClientList';
+import TreatmentList from './pages/treatments/TreatmentList';
+import ChickenManagement from './pages/chicken/ChickenManagement';
 import ProductList from './pages/products/ProductList';
 import PointOfSale from './pages/sales/PointOfSale';
 import SalesList from './pages/sales/SalesList';
+import DiscountRequests from './pages/sales/DiscountRequests';
 import RefundList from './pages/refunds/RefundList';
 import StockManagement from './pages/stock/StockManagement';
 import Profile from './pages/profile/Profile';
@@ -55,6 +59,36 @@ function App() {
               }
             />
 
+            {/* Clients - Admin Only */}
+            <Route
+              path="/clients"
+              element={
+                <ProtectedRoute adminOnly>
+                  <ClientList />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Treatments - Admin Only */}
+            <Route
+              path="/treatments"
+              element={
+                <ProtectedRoute adminOnly>
+                  <TreatmentList />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Chicken Management - Admin Only */}
+            <Route
+              path="/chicken"
+              element={
+                <ProtectedRoute adminOnly>
+                  <ChickenManagement />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Products */}
             <Route path="/products" element={<ProductList />} />
 
@@ -63,6 +97,16 @@ function App() {
 
             {/* Sales History */}
             <Route path="/sales" element={<SalesList />} />
+
+            {/* Discount Requests - Admin Only */}
+            <Route
+              path="/discount-requests"
+              element={
+                <ProtectedRoute adminOnly>
+                  <DiscountRequests />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Refunds */}
             <Route path="/refunds" element={<RefundList />} />

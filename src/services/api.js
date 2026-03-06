@@ -99,6 +99,12 @@ export const salesAPI = {
   getByNumber: (saleNumber) => api.get(`/sales/number/${saleNumber}`),
   create: (data) => api.post('/sales', data),
   getMySummary: (params) => api.get('/sales/my-summary', { params }),
+  // Discount requests
+  requestDiscount: (data) => api.post('/sales/request-discount', data),
+  getMyDiscountRequests: () => api.get('/sales/my-discount-requests'),
+  getDiscountRequests: (params) => api.get('/sales/discount-requests', { params }),
+  approveDiscount: (id) => api.put(`/sales/discount-requests/${id}/approve`),
+  rejectDiscount: (id, data) => api.put(`/sales/discount-requests/${id}/reject`, data),
 };
 
 // Refund API
@@ -129,6 +135,40 @@ export const dashboardAPI = {
   getLowStockAlerts: () => api.get('/dashboard/low-stock'),
   getRecentActivity: (params) => api.get('/dashboard/recent-activity', { params }),
   getRefundStats: (params) => api.get('/dashboard/refund-stats', { params }),
+};
+
+// Client API
+export const clientAPI = {
+  getAll: (params) => api.get('/clients', { params }),
+  getOne: (id) => api.get(`/clients/${id}`),
+  create: (data) => api.post('/clients', data),
+  update: (id, data) => api.put(`/clients/${id}`, data),
+  deactivate: (id) => api.delete(`/clients/${id}`),
+  reactivate: (id) => api.put(`/clients/${id}/reactivate`),
+  search: (q) => api.get('/clients/search', { params: { q } }),
+  addPet: (id, data) => api.post(`/clients/${id}/pets`, data),
+  removePet: (id, petId) => api.delete(`/clients/${id}/pets/${petId}`),
+};
+
+// Treatment API
+export const treatmentAPI = {
+  getAll: (params) => api.get('/treatments', { params }),
+  getOne: (id) => api.get(`/treatments/${id}`),
+  create: (data) => api.post('/treatments', data),
+  update: (id, data) => api.put(`/treatments/${id}`, data),
+  cancel: (id) => api.put(`/treatments/${id}/cancel`),
+  getByClient: (clientId, params) => api.get(`/treatments/client/${clientId}`, { params }),
+  getStats: () => api.get('/treatments/stats'),
+  getUpcoming: (params) => api.get('/treatments/upcoming', { params }),
+};
+
+// Chicken API
+export const chickenAPI = {
+  getStock: () => api.get('/chicken/stock'),
+  getTransactions: (params) => api.get('/chicken/transactions', { params }),
+  createPurchase: (data) => api.post('/chicken/purchase', data),
+  createSale: (data) => api.post('/chicken/sale', data),
+  getStats: () => api.get('/chicken/stats'),
 };
 
 export default api;

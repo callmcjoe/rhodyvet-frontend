@@ -8,7 +8,7 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import { DEPARTMENTS, STOCK_ACTION_TYPES } from '../../utils/constants';
-import { formatDateTime, getDepartmentBadgeColor, paintsToDisplay } from '../../utils/helpers';
+import { formatDateTime, getDepartmentBadgeColor, paintsToDisplay, formatStoreQuantity } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 import { PlusIcon, MinusIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 
@@ -24,7 +24,9 @@ const StockManagement = () => {
   const [actionType, setActionType] = useState('add');
   const [quantity, setQuantity] = useState('');
   const [quantityInBags, setQuantityInBags] = useState('');
+  const [quantityInStockUnits, setQuantityInStockUnits] = useState('');
   const [newStock, setNewStock] = useState('');
+  const [newStockInStockUnits, setNewStockInStockUnits] = useState('');
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
 
@@ -51,7 +53,9 @@ const StockManagement = () => {
     setActionType(action);
     setQuantity('');
     setQuantityInBags('');
+    setQuantityInStockUnits('');
     setNewStock('');
+    setNewStockInStockUnits('');
     setNotes('');
     setIsModalOpen(true);
   };
@@ -80,12 +84,25 @@ const StockManagement = () => {
       };
 
       if (selectedProduct.unitType === 'bag') {
+        // Feeds products - use bags
         if (actionType === 'adjust') {
           data.newStockInBags = parseFloat(quantityInBags) || 0;
         } else {
           data.quantityInBags = parseFloat(quantityInBags) || 0;
         }
+      } else if (selectedProduct.stockUnit && selectedProduct.stockUnitEquivalent) {
+        // Store products with stock unit conversion
+        if (actionType === 'adjust') {
+          // Convert stock units to base units
+          const stockUnits = parseFloat(newStockInStockUnits) || 0;
+          data.newStock = stockUnits * selectedProduct.stockUnitEquivalent;
+        } else {
+          // Convert stock units to base units
+          const stockUnits = parseFloat(quantityInStockUnits) || 0;
+          data.quantity = stockUnits * selectedProduct.stockUnitEquivalent;
+        }
       } else {
+        // Legacy store products without stock unit
         if (actionType === 'adjust') {
           data.newStock = parseInt(newStock);
         } else {
@@ -263,9 +280,27 @@ const StockManagement = () => {
                   onChange={(e) => setQuantityInBags(e.target.value)}
                   placeholder="e.g., 5"
                 />
+              ) : selectedProduct?.stockUnit && selectedProduct?.stockUnitEquivalent ? (
+                <div>
+                  <Input
+                    label={`${selectedProduct.stockUnit}s to ${actionType}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quantityInStockUnits}
+                    onChange={(e) => setQuantityInStockUnits(e.target.value)}
+                    placeholder={`e.g., 5 ${selectedProduct.stockUnit}s`}
+                    required
+                  />
+                  {quantityInStockUnits && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      = {(parseFloat(quantityInStockUnits) || 0) * selectedProduct.stockUnitEquivalent} {selectedProduct.baseUnit}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <Input
-                  label="Quantity"
+                  label={`${selectedProduct?.baseUnit || 'Units'} to ${actionType}`}
                   type="number"
                   min="1"
                   value={quantity}
@@ -286,9 +321,27 @@ const StockManagement = () => {
                   placeholder="e.g., 10"
                   required
                 />
+              ) : selectedProduct?.stockUnit && selectedProduct?.stockUnitEquivalent ? (
+                <div>
+                  <Input
+                    label={`New Stock (${selectedProduct.stockUnit}s)`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newStockInStockUnits}
+                    onChange={(e) => setNewStockInStockUnits(e.target.value)}
+                    placeholder={`e.g., 10 ${selectedProduct.stockUnit}s`}
+                    required
+                  />
+                  {newStockInStockUnits && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      = {(parseFloat(newStockInStockUnits) || 0) * selectedProduct.stockUnitEquivalent} {selectedProduct.baseUnit}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <Input
-                  label="New Stock Quantity"
+                  label={`New Stock (${selectedProduct?.baseUnit || 'Quantity'})`}
                   type="number"
                   min="0"
                   value={newStock}
@@ -354,7 +407,7 @@ const StockManagement = () => {
                         </span>
                       ) : (
                         <span className={log.quantityChangedInQuantity > 0 ? 'text-green-600' : 'text-red-600'}>
-                          {log.quantityChangedInQuantity > 0 ? '+' : ''}{log.quantityChangedInQuantity}
+                          {log.quantityChangedInQuantity > 0 ? '+' : '-'}{formatStoreQuantity(Math.abs(log.quantityChangedInQuantity), selectedProduct)}
                         </span>
                       )}
                     </td>

@@ -97,3 +97,26 @@ export const generateSaleDescription = (sale) => {
   const itemCount = sale.items?.length || 0;
   return `${itemCount} item${itemCount !== 1 ? 's' : ''} - ${formatCurrency(sale.totalAmount)}`;
 };
+
+// Format store product quantity in stock units (if available) or base units
+export const formatStoreQuantity = (quantity, product) => {
+  if (!product) return `${quantity}`;
+
+  // If product has stock unit conversion, display in stock units
+  if (product.stockUnit && product.stockUnitEquivalent && product.stockUnitEquivalent > 0) {
+    const stockUnitQty = quantity / product.stockUnitEquivalent;
+    const stockUnitLabel = product.stockUnit || 'unit';
+
+    // Check if it's a whole number
+    if (Number.isInteger(stockUnitQty)) {
+      return `${stockUnitQty} ${stockUnitLabel}${stockUnitQty !== 1 ? 's' : ''}`;
+    } else {
+      // Show as decimal stock units
+      return `${stockUnitQty.toFixed(2)} ${stockUnitLabel}${stockUnitQty !== 1 ? 's' : ''}`;
+    }
+  }
+
+  // Fallback to base unit display
+  const baseUnit = product.baseUnit || 'unit';
+  return `${quantity} ${baseUnit}${quantity !== 1 ? 's' : ''}`;
+};

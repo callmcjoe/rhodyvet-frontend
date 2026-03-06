@@ -306,11 +306,11 @@ const RefundList = () => {
                         <p className="font-medium">{item.productName}</p>
                         {item.unitType === 'quantity' ? (
                           <div className="mt-2">
-                            <label className="text-sm text-gray-500">Quantity to refund (max: {item.quantity})</label>
+                            <label className="text-sm text-gray-500">Quantity to refund (max: {item.quantity || 0})</label>
                             <Input
                               type="number"
                               min="0"
-                              max={item.quantity}
+                              max={item.quantity || 0}
                               value={item.refundQuantity}
                               onChange={(e) => {
                                 const updated = [...refundItems];
@@ -323,10 +323,10 @@ const RefundList = () => {
                         ) : (
                           <div className="grid grid-cols-3 gap-2 mt-2">
                             <Input
-                              label={`Bags (max: ${item.quantityBags})`}
+                              label={`Bags (max: ${item.quantityBags || 0})`}
                               type="number"
                               min="0"
-                              max={item.quantityBags}
+                              max={item.quantityBags || 0}
                               value={item.refundQuantityBags}
                               onChange={(e) => {
                                 const updated = [...refundItems];
@@ -336,10 +336,10 @@ const RefundList = () => {
                               disabled={!item.selected}
                             />
                             <Input
-                              label={`1/2 Bags (max: ${item.quantityHalfBags})`}
+                              label={`1/2 Bags (max: ${item.quantityHalfBags || 0})`}
                               type="number"
                               min="0"
-                              max={item.quantityHalfBags}
+                              max={item.quantityHalfBags || 0}
                               value={item.refundQuantityHalfBags}
                               onChange={(e) => {
                                 const updated = [...refundItems];
@@ -349,14 +349,40 @@ const RefundList = () => {
                               disabled={!item.selected}
                             />
                             <Input
-                              label={`Paints (max: ${item.quantityPaints})`}
+                              label={`1/3 Bags (max: ${item.quantityThirdBags || 0})`}
                               type="number"
                               min="0"
-                              max={item.quantityPaints}
+                              max={item.quantityThirdBags || 0}
+                              value={item.refundQuantityThirdBags}
+                              onChange={(e) => {
+                                const updated = [...refundItems];
+                                updated[idx].refundQuantityThirdBags = parseInt(e.target.value) || 0;
+                                setRefundItems(updated);
+                              }}
+                              disabled={!item.selected}
+                            />
+                            <Input
+                              label={`Paints (max: ${item.quantityPaints || 0})`}
+                              type="number"
+                              min="0"
+                              max={item.quantityPaints || 0}
                               value={item.refundQuantityPaints}
                               onChange={(e) => {
                                 const updated = [...refundItems];
                                 updated[idx].refundQuantityPaints = parseInt(e.target.value) || 0;
+                                setRefundItems(updated);
+                              }}
+                              disabled={!item.selected}
+                            />
+                            <Input
+                              label={`1/2 Paints (max: ${item.quantityHalfPaints || 0})`}
+                              type="number"
+                              min="0"
+                              max={item.quantityHalfPaints || 0}
+                              value={item.refundQuantityHalfPaints}
+                              onChange={(e) => {
+                                const updated = [...refundItems];
+                                updated[idx].refundQuantityHalfPaints = parseInt(e.target.value) || 0;
                                 setRefundItems(updated);
                               }}
                               disabled={!item.selected}
