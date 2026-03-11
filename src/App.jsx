@@ -21,6 +21,8 @@ import DiscountRequests from './pages/sales/DiscountRequests';
 import RefundList from './pages/refunds/RefundList';
 import StockManagement from './pages/stock/StockManagement';
 import Profile from './pages/profile/Profile';
+import JumiaPOS from './pages/jumia/JumiaPOS';
+import JumiaSales from './pages/jumia/JumiaSales';
 
 function App() {
   return (
@@ -94,6 +96,24 @@ function App() {
 
             {/* Point of Sale */}
             <Route path="/pos" element={<PointOfSale />} />
+
+            {/* Jumia - Admin Only */}
+            <Route
+              path="/jumia"
+              element={
+                <ProtectedRoute adminOnly>
+                  <JumiaPOS />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/jumia/sales"
+              element={
+                <ProtectedRoute adminOnly>
+                  <JumiaSales />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Sales History */}
             <Route path="/sales" element={<SalesList />} />

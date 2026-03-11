@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { productAPI } from '../../services/api';
+import { productAPI, stockAPI } from '../../services/api';
 import Card from '../../components/common/Card';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
@@ -11,7 +11,7 @@ import { DEPARTMENTS } from '../../utils/constants';
 import { formatCurrency, getDepartmentBadgeColor } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -42,6 +42,14 @@ const ProductList = () => {
     initialStockInStockUnits: '',
   });
   const [saleUnits, setSaleUnits] = useState([{ name: '', price: '', equivalent: '' }]);
+  const [duplicateModal, setDuplicateModal] = useState({ isOpen: false, product: null });
+  const [stockToAdd, setStockToAdd] = useState({
+    quantityInBags: '',
+    quantityInStockUnits: '',
+    quantity: '',
+    notes: ''
+  });
+  const [addingStock, setAddingStock] = useState(false);
 
   const { isAdmin } = useAuth();
 
@@ -122,7 +130,68 @@ const ProductList = () => {
       resetForm();
       fetchProducts();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Operation failed');
+      if (error.response?.data?.code === 'DUPLICATE_PRODUCT') {
+        setIsModalOpen(false);
+        setDuplicateModal({
+          isOpen: true,
+          product: error.response.data.existingProduct
+        });
+        setStockToAdd({ bags: '', quantity: '' });
+      } else {
+        toast.error(error.response?.data?.message || 'Operation failed');
+      }
+    }
+  };
+
+  const handleAddStockToExisting = async () => {
+    const product = duplicateModal.product;
+    if (!product) return;
+
+    setAddingStock(true);
+    try {
+      const data = {
+        notes: stockToAdd.notes || 'Stock added during product creation'
+      };
+
+      if (product.unitType === 'bag') {
+        // Feeds products - use bags
+        const bags = parseFloat(stockToAdd.quantityInBags) || 0;
+        if (bags <= 0) {
+          toast.error('Please enter a valid number of bags');
+          setAddingStock(false);
+          return;
+        }
+        data.quantityInBags = bags;
+      } else if (product.stockUnit && product.stockUnitEquivalent) {
+        // Store products with stock unit conversion
+        const stockUnits = parseFloat(stockToAdd.quantityInStockUnits) || 0;
+        if (stockUnits <= 0) {
+          toast.error(`Please enter a valid number of ${product.stockUnit}s`);
+          setAddingStock(false);
+          return;
+        }
+        data.quantity = stockUnits * product.stockUnitEquivalent;
+      } else {
+        // Legacy store products without stock unit
+        const qty = parseFloat(stockToAdd.quantity) || 0;
+        if (qty <= 0) {
+          toast.error('Please enter a valid quantity');
+          setAddingStock(false);
+          return;
+        }
+        data.quantity = qty;
+      }
+
+      await stockAPI.addStock(product._id, data);
+      toast.success(`Stock added to "${product.name}" successfully`);
+      setDuplicateModal({ isOpen: false, product: null });
+      setStockToAdd({ quantityInBags: '', quantityInStockUnits: '', quantity: '', notes: '' });
+      resetForm();
+      fetchProducts();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to add stock');
+    } finally {
+      setAddingStock(false);
     }
   };
 
@@ -361,6 +430,99 @@ const ProductList = () => {
           emptyMessage="No products found"
         />
       </Card>
+
+      {/* Duplicate Product Modal */}
+      <Modal
+        isOpen={duplicateModal.isOpen}
+        onClose={() => {
+          setDuplicateModal({ isOpen: false, product: null });
+          setStockToAdd({ quantityInBags: '', quantityInStockUnits: '', quantity: '', notes: '' });
+        }}
+        title={`Add Stock - ${duplicateModal.product?.name || ''}`}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
+            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-yellow-800">
+              This product already exists. Add stock to the existing product instead.
+            </p>
+          </div>
+
+          {duplicateModal.product && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-sm text-gray-500">Current Stock</p>
+              <p className="font-semibold">{duplicateModal.product.stockDisplay}</p>
+            </div>
+          )}
+
+          {duplicateModal.product?.unitType === 'bag' ? (
+            <Input
+              label="Bags to add"
+              type="number"
+              min="0"
+              step="0.01"
+              value={stockToAdd.quantityInBags}
+              onChange={(e) => setStockToAdd({ ...stockToAdd, quantityInBags: e.target.value })}
+              placeholder="e.g., 5"
+            />
+          ) : duplicateModal.product?.stockUnit && duplicateModal.product?.stockUnitEquivalent ? (
+            <div>
+              <Input
+                label={`${duplicateModal.product.stockUnit}s to add`}
+                type="number"
+                min="0"
+                step="0.01"
+                value={stockToAdd.quantityInStockUnits}
+                onChange={(e) => setStockToAdd({ ...stockToAdd, quantityInStockUnits: e.target.value })}
+                placeholder={`e.g., 5 ${duplicateModal.product.stockUnit}s`}
+              />
+              {stockToAdd.quantityInStockUnits && (
+                <p className="text-xs text-gray-500 mt-1">
+                  = {(parseFloat(stockToAdd.quantityInStockUnits) || 0) * duplicateModal.product.stockUnitEquivalent} {duplicateModal.product.baseUnit}
+                </p>
+              )}
+            </div>
+          ) : (
+            <Input
+              label={`${duplicateModal.product?.baseUnit || 'Units'} to add`}
+              type="number"
+              min="0"
+              step="0.01"
+              value={stockToAdd.quantity}
+              onChange={(e) => setStockToAdd({ ...stockToAdd, quantity: e.target.value })}
+              placeholder="Enter quantity"
+            />
+          )}
+
+          <Input
+            label="Notes"
+            value={stockToAdd.notes}
+            onChange={(e) => setStockToAdd({ ...stockToAdd, notes: e.target.value })}
+            placeholder="Reason for stock addition"
+          />
+
+          <div className="flex space-x-3 pt-4">
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => {
+                setDuplicateModal({ isOpen: false, product: null });
+                setStockToAdd({ quantityInBags: '', quantityInStockUnits: '', quantity: '', notes: '' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              fullWidth
+              onClick={handleAddStockToExisting}
+              loading={addingStock}
+            >
+              Add Stock
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add/Edit Modal */}
       <Modal

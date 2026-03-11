@@ -10,6 +10,7 @@ import {
   TicketIcon,
   HeartIcon,
   SparklesIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Chicken', href: '/chicken', icon: SparklesIcon, adminOnly: true },
   { name: 'Products', href: '/products', icon: CubeIcon, adminOnly: false },
   { name: 'Point of Sale', href: '/pos', icon: ShoppingCartIcon, adminOnly: false },
+  { name: 'Jumia', href: '/jumia', icon: TruckIcon, adminOnly: true },
   { name: 'Sales', href: '/sales', icon: ChartBarIcon, adminOnly: false },
   { name: 'Discounts', href: '/discount-requests', icon: TicketIcon, adminOnly: true },
   { name: 'Refunds', href: '/refunds', icon: ArrowPathIcon, adminOnly: false },
