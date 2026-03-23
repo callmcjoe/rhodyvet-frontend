@@ -7,8 +7,10 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import Pagination from '../../components/common/Pagination';
 import { PET_TYPES } from '../../utils/constants';
 import { formatDateTime, formatCurrency } from '../../utils/helpers';
+import { useDebounce } from '../../hooks/useDebounce';
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -21,7 +23,9 @@ import {
 const ClientList = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
@@ -47,14 +51,29 @@ const ClientList = () => {
 
   useEffect(() => {
     fetchClients();
-  }, [search]);
+  }, [debouncedSearch, pagination.page]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearch]);
 
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const params = search ? { search } : {};
+      const params = {
+        page: pagination.page,
+        limit: 20,
+      };
+      if (debouncedSearch) params.search = debouncedSearch;
+
       const response = await clientAPI.getAll(params);
       setClients(response.data.data);
+      setPagination({
+        page: response.data.page || 1,
+        pages: response.data.pages || 1,
+        total: response.data.total || response.data.count || 0,
+      });
     } catch (error) {
       toast.error('Failed to fetch clients');
     } finally {
@@ -282,8 +301,8 @@ const ClientList = () => {
       <Card>
         <Input
           placeholder="Search by name or phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           className="max-w-md"
         />
       </Card>
@@ -295,6 +314,12 @@ const ClientList = () => {
           data={clients}
           loading={loading}
           emptyMessage="No clients found"
+        />
+        <Pagination
+          page={pagination.page}
+          pages={pagination.pages}
+          total={pagination.total}
+          onPageChange={(newPage) => setPagination({ ...pagination, page: newPage })}
         />
       </Card>
 

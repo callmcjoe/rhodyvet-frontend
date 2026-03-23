@@ -37,7 +37,7 @@ export const calculateFeedTotal = (quantities, product) => {
   const {
     quantityBags = 0,
     quantityHalfBags = 0,
-    quantityThirdBags = 0,
+    quantityQuarterBags = 0,
     quantityPaints = 0,
     quantityHalfPaints = 0,
   } = quantities;
@@ -45,7 +45,7 @@ export const calculateFeedTotal = (quantities, product) => {
   return (
     quantityBags * (product.pricePerBag || 0) +
     quantityHalfBags * (product.pricePerHalfBag || 0) +
-    quantityThirdBags * (product.pricePerThirdBag || 0) +
+    quantityQuarterBags * (product.pricePerQuarterBag || 0) +
     quantityPaints * (product.pricePerPaint || 0) +
     quantityHalfPaints * (product.pricePerHalfPaint || 0)
   );
@@ -55,7 +55,7 @@ export const calculatePaintsEquivalent = (quantities) => {
   const {
     quantityBags = 0,
     quantityHalfBags = 0,
-    quantityThirdBags = 0,
+    quantityQuarterBags = 0,
     quantityPaints = 0,
     quantityHalfPaints = 0,
   } = quantities;
@@ -63,7 +63,7 @@ export const calculatePaintsEquivalent = (quantities) => {
   return (
     quantityBags * 8 +
     quantityHalfBags * 4 +
-    quantityThirdBags * (8 / 3) +
+    quantityQuarterBags * 2 +
     quantityPaints * 1 +
     quantityHalfPaints * 0.5
   );

@@ -78,7 +78,7 @@ const PointOfSale = () => {
         // For feeds
         quantityBags: 0,
         quantityHalfBags: 0,
-        quantityThirdBags: 0,
+        quantityQuarterBags: 0,
         quantityPaints: 0,
         quantityHalfPaints: 0,
         // For store
@@ -130,7 +130,7 @@ const PointOfSale = () => {
       return calculateFeedTotal({
         quantityBags: item.quantityBags,
         quantityHalfBags: item.quantityHalfBags,
-        quantityThirdBags: item.quantityThirdBags,
+        quantityQuarterBags: item.quantityQuarterBags,
         quantityPaints: item.quantityPaints,
         quantityHalfPaints: item.quantityHalfPaints,
       }, item.product);
@@ -173,7 +173,7 @@ const PointOfSale = () => {
     return cart.length > 0 && cart.every(item => {
       if (item.product.unitType === 'bag') {
         return item.quantityBags > 0 || item.quantityHalfBags > 0 ||
-               item.quantityThirdBags > 0 || item.quantityPaints > 0 ||
+               item.quantityQuarterBags > 0 || item.quantityPaints > 0 ||
                item.quantityHalfPaints > 0;
       }
       return item.quantity > 0;
@@ -194,7 +194,7 @@ const PointOfSale = () => {
           quantity: item.quantity,
           quantityBags: item.quantityBags,
           quantityHalfBags: item.quantityHalfBags,
-          quantityThirdBags: item.quantityThirdBags,
+          quantityQuarterBags: item.quantityQuarterBags,
           quantityPaints: item.quantityPaints,
           quantityHalfPaints: item.quantityHalfPaints,
           // Include sale unit info for store products
@@ -251,7 +251,7 @@ const PointOfSale = () => {
           quantity: item.quantity,
           quantityBags: item.quantityBags,
           quantityHalfBags: item.quantityHalfBags,
-          quantityThirdBags: item.quantityThirdBags,
+          quantityQuarterBags: item.quantityQuarterBags,
           quantityPaints: item.quantityPaints,
           quantityHalfPaints: item.quantityHalfPaints,
           saleUnitName: item.selectedSaleUnit?.name,
@@ -430,12 +430,12 @@ const PointOfSale = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500">1/3 Bags</label>
+                        <label className="text-xs text-gray-500">1/4 Bags</label>
                         <input
                           type="number"
                           min="0"
-                          value={item.quantityThirdBags}
-                          onChange={(e) => updateFeedQuantity(item.product._id, 'quantityThirdBags', e.target.value)}
+                          value={item.quantityQuarterBags}
+                          onChange={(e) => updateFeedQuantity(item.product._id, 'quantityQuarterBags', e.target.value)}
                           className="input py-1 text-sm"
                         />
                       </div>

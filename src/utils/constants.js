@@ -23,7 +23,7 @@ export const UNIT_TYPES = [
 export const FEED_UNITS = [
   { value: 'bag', label: 'Bag', paints: 8 },
   { value: 'halfBag', label: '1/2 Bag', paints: 4 },
-  { value: 'thirdBag', label: '1/3 Bag', paints: 2.67 },
+  { value: 'quarterBag', label: '1/4 Bag', paints: 2 },
   { value: 'paint', label: 'Paint', paints: 1 },
   { value: 'halfPaint', label: '1/2 Paint', paints: 0.5 },
 ];

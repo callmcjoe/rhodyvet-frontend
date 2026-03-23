@@ -76,7 +76,7 @@ const RefundList = () => {
         ...item,
         refundQuantityBags: 0,
         refundQuantityHalfBags: 0,
-        refundQuantityThirdBags: 0,
+        refundQuantityQuarterBags: 0,
         refundQuantityPaints: 0,
         refundQuantityHalfPaints: 0,
         refundQuantity: 0,
@@ -111,7 +111,7 @@ const RefundList = () => {
           quantity: item.refundQuantity,
           quantityBags: item.refundQuantityBags,
           quantityHalfBags: item.refundQuantityHalfBags,
-          quantityThirdBags: item.refundQuantityThirdBags,
+          quantityQuarterBags: item.refundQuantityQuarterBags,
           quantityPaints: item.refundQuantityPaints,
           quantityHalfPaints: item.refundQuantityHalfPaints,
         })),
@@ -349,14 +349,14 @@ const RefundList = () => {
                               disabled={!item.selected}
                             />
                             <Input
-                              label={`1/3 Bags (max: ${item.quantityThirdBags || 0})`}
+                              label={`1/4 Bags (max: ${item.quantityQuarterBags || 0})`}
                               type="number"
                               min="0"
-                              max={item.quantityThirdBags || 0}
-                              value={item.refundQuantityThirdBags}
+                              max={item.quantityQuarterBags || 0}
+                              value={item.refundQuantityQuarterBags}
                               onChange={(e) => {
                                 const updated = [...refundItems];
-                                updated[idx].refundQuantityThirdBags = parseInt(e.target.value) || 0;
+                                updated[idx].refundQuantityQuarterBags = parseInt(e.target.value) || 0;
                                 setRefundItems(updated);
                               }}
                               disabled={!item.selected}

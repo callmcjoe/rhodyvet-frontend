@@ -7,9 +7,11 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import Pagination from '../../components/common/Pagination';
 import { DEPARTMENTS } from '../../utils/constants';
 import { formatCurrency, getDepartmentBadgeColor } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import toast from 'react-hot-toast';
 import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
@@ -18,9 +20,11 @@ const ProductList = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
   const [filters, setFilters] = useState({
     department: '',
-    search: '',
   });
   const [formData, setFormData] = useState({
     name: '',
@@ -29,7 +33,7 @@ const ProductList = () => {
     unitType: '',
     pricePerBag: '',
     pricePerHalfBag: '',
-    pricePerThirdBag: '',
+    pricePerQuarterBag: '',
     pricePerPaint: '',
     pricePerHalfPaint: '',
     pricePerUnit: '',
@@ -40,6 +44,7 @@ const ProductList = () => {
     stockUnit: '',
     stockUnitEquivalent: '',
     initialStockInStockUnits: '',
+    initialExtraBaseUnits: '',
   });
   const [saleUnits, setSaleUnits] = useState([{ name: '', price: '', equivalent: '' }]);
   const [duplicateModal, setDuplicateModal] = useState({ isOpen: false, product: null });
@@ -55,19 +60,35 @@ const ProductList = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [filters]);
+  }, [filters, debouncedSearch, pagination.page]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await productAPI.getAll(filters);
+      const params = {
+        ...filters,
+        search: debouncedSearch,
+        page: pagination.page,
+        limit: 20,
+      };
+      const response = await productAPI.getAll(params);
       setProducts(response.data.data);
+      setPagination({
+        page: response.data.page || 1,
+        pages: response.data.pages || 1,
+        total: response.data.total || response.data.count || 0,
+      });
     } catch (error) {
       toast.error('Failed to fetch products');
     } finally {
       setLoading(false);
     }
   };
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [filters, debouncedSearch]);
 
   const handleDepartmentChange = (e) => {
     const department = e.target.value;
@@ -93,7 +114,7 @@ const ProductList = () => {
         ...formData,
         pricePerBag: formData.pricePerBag ? parseFloat(formData.pricePerBag) : undefined,
         pricePerHalfBag: formData.pricePerHalfBag ? parseFloat(formData.pricePerHalfBag) : undefined,
-        pricePerThirdBag: formData.pricePerThirdBag ? parseFloat(formData.pricePerThirdBag) : undefined,
+        pricePerQuarterBag: formData.pricePerQuarterBag ? parseFloat(formData.pricePerQuarterBag) : undefined,
         pricePerPaint: formData.pricePerPaint ? parseFloat(formData.pricePerPaint) : undefined,
         pricePerHalfPaint: formData.pricePerHalfPaint ? parseFloat(formData.pricePerHalfPaint) : undefined,
         pricePerUnit: formData.pricePerUnit ? parseFloat(formData.pricePerUnit) : undefined,
@@ -109,7 +130,20 @@ const ProductList = () => {
         data.baseUnit = formData.baseUnit;
         data.stockUnit = formData.stockUnit;
         data.stockUnitEquivalent = formData.stockUnitEquivalent ? parseFloat(formData.stockUnitEquivalent) : undefined;
-        data.initialStockInStockUnits = formData.initialStockInStockUnits ? parseFloat(formData.initialStockInStockUnits) : undefined;
+
+        // Calculate total initial stock: (stockUnits × equivalent) + extra base units
+        const stockUnits = parseFloat(formData.initialStockInStockUnits) || 0;
+        const equivalent = parseFloat(formData.stockUnitEquivalent) || 0;
+        const extraBaseUnits = parseFloat(formData.initialExtraBaseUnits) || 0;
+        const totalBaseUnits = (stockUnits * equivalent) + extraBaseUnits;
+
+        // Pass the calculated total as initialStockInStockUnits (backend will convert)
+        if (totalBaseUnits > 0 && equivalent > 0) {
+          data.initialStockInStockUnits = totalBaseUnits / equivalent;
+        } else {
+          data.initialStockInStockUnits = undefined;
+        }
+
         data.saleUnits = saleUnits
           .filter(u => u.name && u.price && u.equivalent)
           .map(u => ({
@@ -225,7 +259,7 @@ const ProductList = () => {
       unitType: product.unitType,
       pricePerBag: product.pricePerBag?.toString() || '',
       pricePerHalfBag: product.pricePerHalfBag?.toString() || '',
-      pricePerThirdBag: product.pricePerThirdBag?.toString() || '',
+      pricePerQuarterBag: product.pricePerQuarterBag?.toString() || '',
       pricePerPaint: product.pricePerPaint?.toString() || '',
       pricePerHalfPaint: product.pricePerHalfPaint?.toString() || '',
       pricePerUnit: product.pricePerUnit?.toString() || '',
@@ -259,7 +293,7 @@ const ProductList = () => {
       unitType: '',
       pricePerBag: '',
       pricePerHalfBag: '',
-      pricePerThirdBag: '',
+      pricePerQuarterBag: '',
       pricePerPaint: '',
       pricePerHalfPaint: '',
       pricePerUnit: '',
@@ -270,6 +304,7 @@ const ProductList = () => {
       stockUnit: '',
       stockUnitEquivalent: '',
       initialStockInStockUnits: '',
+      initialExtraBaseUnits: '',
     });
     setSaleUnits([{ name: '', price: '', equivalent: '' }]);
   };
@@ -408,9 +443,9 @@ const ProductList = () => {
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            placeholder="Search products"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            placeholder="Search products..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
             placeholder="All Departments"
@@ -428,6 +463,12 @@ const ProductList = () => {
           data={products}
           loading={loading}
           emptyMessage="No products found"
+        />
+        <Pagination
+          page={pagination.page}
+          pages={pagination.pages}
+          total={pagination.total}
+          onPageChange={(newPage) => setPagination({ ...pagination, page: newPage })}
         />
       </Card>
 
@@ -578,12 +619,12 @@ const ProductList = () => {
                   onChange={(e) => setFormData({ ...formData, pricePerHalfBag: e.target.value })}
                 />
                 <Input
-                  label="Price per 1/3 Bag"
-                  name="pricePerThirdBag"
+                  label="Price per 1/4 Bag"
+                  name="pricePerQuarterBag"
                   type="number"
                   step="0.01"
-                  value={formData.pricePerThirdBag}
-                  onChange={(e) => setFormData({ ...formData, pricePerThirdBag: e.target.value })}
+                  value={formData.pricePerQuarterBag}
+                  onChange={(e) => setFormData({ ...formData, pricePerQuarterBag: e.target.value })}
                 />
                 <Input
                   label="Price per Paint"
@@ -643,28 +684,51 @@ const ProductList = () => {
                   name="stockUnitEquivalent"
                   type="number"
                   step="0.01"
-                  placeholder="e.g., 25 (if 1 bag = 25 kg)"
+                  placeholder="e.g., 50 (if 1 pack = 50 tablets)"
                   value={formData.stockUnitEquivalent}
                   onChange={(e) => setFormData({ ...formData, stockUnitEquivalent: e.target.value })}
                   required
                 />
-                {!selectedProduct && (
-                  <Input
-                    label={`Initial Stock (in ${formData.stockUnit || 'stock units'})`}
-                    name="initialStockInStockUnits"
-                    type="number"
-                    step="0.01"
-                    placeholder={`e.g., 10 ${formData.stockUnit || 'units'}`}
-                    value={formData.initialStockInStockUnits}
-                    onChange={(e) => setFormData({ ...formData, initialStockInStockUnits: e.target.value })}
-                  />
-                )}
               </div>
-              {formData.baseUnit && formData.stockUnit && formData.stockUnitEquivalent && formData.initialStockInStockUnits && (
-                <p className="text-sm text-gray-500">
-                  Total: {parseFloat(formData.initialStockInStockUnits) * parseFloat(formData.stockUnitEquivalent)} {formData.baseUnit}
-                  ({formData.initialStockInStockUnits} {formData.stockUnit} × {formData.stockUnitEquivalent} {formData.baseUnit})
-                </p>
+
+              {!selectedProduct && formData.stockUnitEquivalent && (
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Initial Stock</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label={`${formData.stockUnit || 'Stock units'} (full)`}
+                      name="initialStockInStockUnits"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder={`e.g., 50 ${formData.stockUnit || 'units'}`}
+                      value={formData.initialStockInStockUnits}
+                      onChange={(e) => setFormData({ ...formData, initialStockInStockUnits: e.target.value })}
+                    />
+                    <Input
+                      label={`Extra ${formData.baseUnit || 'base units'}`}
+                      name="initialExtraBaseUnits"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder={`e.g., 10 ${formData.baseUnit || 'units'}`}
+                      value={formData.initialExtraBaseUnits}
+                      onChange={(e) => setFormData({ ...formData, initialExtraBaseUnits: e.target.value })}
+                    />
+                  </div>
+                  {(formData.initialStockInStockUnits || formData.initialExtraBaseUnits) && (
+                    <p className="text-sm text-gray-600 bg-white p-2 rounded border">
+                      <span className="font-medium">Total: </span>
+                      {(() => {
+                        const stockUnits = parseFloat(formData.initialStockInStockUnits) || 0;
+                        const equivalent = parseFloat(formData.stockUnitEquivalent) || 0;
+                        const extraBase = parseFloat(formData.initialExtraBaseUnits) || 0;
+                        const totalBase = (stockUnits * equivalent) + extraBase;
+                        return `${totalBase} ${formData.baseUnit || 'base units'} (${stockUnits} ${formData.stockUnit || 'stock units'} × ${equivalent} + ${extraBase} extra)`;
+                      })()}
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="border-t pt-4">

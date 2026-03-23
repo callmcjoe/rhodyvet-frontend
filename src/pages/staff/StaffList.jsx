@@ -7,9 +7,11 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import Pagination from '../../components/common/Pagination';
 import { DEPARTMENTS, ROLES } from '../../utils/constants';
 import { formatDate, getRoleBadgeColor, getDepartmentBadgeColor } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import toast from 'react-hot-toast';
 import { PlusIcon, PencilIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
 
@@ -19,6 +21,9 @@ const StaffList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -31,20 +36,35 @@ const StaffList = () => {
   const [filters, setFilters] = useState({
     department: '',
     role: '',
-    search: '',
   });
 
   const { isSuperAdmin } = useAuth();
 
   useEffect(() => {
     fetchStaff();
-  }, [filters]);
+  }, [filters, debouncedSearch, pagination.page]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [filters, debouncedSearch]);
 
   const fetchStaff = async () => {
     try {
       setLoading(true);
-      const response = await staffAPI.getAll(filters);
+      const params = {
+        ...filters,
+        search: debouncedSearch,
+        page: pagination.page,
+        limit: 20,
+      };
+      const response = await staffAPI.getAll(params);
       setStaff(response.data.data);
+      setPagination({
+        page: response.data.page || 1,
+        pages: response.data.pages || 1,
+        total: response.data.total || response.data.count || 0,
+      });
     } catch (error) {
       toast.error('Failed to fetch staff');
     } finally {
@@ -236,9 +256,9 @@ const StaffList = () => {
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
-            placeholder="Search by name or email"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            placeholder="Search by name or email..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
             placeholder="All Departments"
@@ -262,6 +282,12 @@ const StaffList = () => {
           data={staff}
           loading={loading}
           emptyMessage="No staff members found"
+        />
+        <Pagination
+          page={pagination.page}
+          pages={pagination.pages}
+          total={pagination.total}
+          onPageChange={(newPage) => setPagination({ ...pagination, page: newPage })}
         />
       </Card>
 

@@ -6,6 +6,7 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import Pagination from '../../components/common/Pagination';
 import { SALE_STATUS } from '../../utils/constants';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import toast from 'react-hot-toast';
@@ -175,30 +176,12 @@ const JumiaSales = () => {
           onRowClick={viewSaleDetails}
         />
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="flex justify-between items-center mt-4 pt-4 border-t">
-            <p className="text-sm text-gray-500">
-              Showing page {pagination.page} of {pagination.pages} ({pagination.total} total)
-            </p>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                disabled={pagination.page <= 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                disabled={pagination.page >= pagination.pages}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          page={pagination.page}
+          pages={pagination.pages}
+          total={pagination.total}
+          onPageChange={(newPage) => setPagination({ ...pagination, page: newPage })}
+        />
       </Card>
 
       {/* Sale Detail Modal */}
@@ -246,7 +229,7 @@ const JumiaSales = () => {
                         <p className="text-sm text-gray-500">
                           {item.quantityBags > 0 && `${item.quantityBags} bag(s) `}
                           {item.quantityHalfBags > 0 && `${item.quantityHalfBags} 1/2 bag(s) `}
-                          {item.quantityThirdBags > 0 && `${item.quantityThirdBags} 1/3 bag(s) `}
+                          {item.quantityQuarterBags > 0 && `${item.quantityQuarterBags} 1/4 bag(s) `}
                           {item.quantityPaints > 0 && `${item.quantityPaints} paint(s) `}
                           {item.quantityHalfPaints > 0 && `${item.quantityHalfPaints} 1/2 paint(s)`}
                         </p>

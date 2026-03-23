@@ -7,8 +7,10 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import Pagination from '../../components/common/Pagination';
 import { DEPARTMENTS, STOCK_ACTION_TYPES } from '../../utils/constants';
 import { formatDateTime, getDepartmentBadgeColor, paintsToDisplay, formatStoreQuantity } from '../../utils/helpers';
+import { useDebounce } from '../../hooks/useDebounce';
 import toast from 'react-hot-toast';
 import { PlusIcon, MinusIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 
@@ -18,6 +20,9 @@ const StockManagement = () => {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -32,15 +37,31 @@ const StockManagement = () => {
 
   useEffect(() => {
     fetchStock();
-  }, [departmentFilter]);
+  }, [departmentFilter, debouncedSearch, pagination.page]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [departmentFilter, debouncedSearch]);
 
   const fetchStock = async () => {
     try {
       setLoading(true);
-      const params = departmentFilter ? { department: departmentFilter } : {};
+      const params = {
+        page: pagination.page,
+        limit: 20,
+      };
+      if (departmentFilter) params.department = departmentFilter;
+      if (debouncedSearch) params.search = debouncedSearch;
+
       const response = await stockAPI.getOverview(params);
       setStock(response.data.data);
       setSummary(response.data.summary);
+      setPagination({
+        page: response.data.page || 1,
+        pages: response.data.pages || 1,
+        total: response.data.total || response.data.count || 0,
+      });
     } catch (error) {
       toast.error('Failed to fetch stock');
     } finally {
@@ -235,15 +256,21 @@ const StockManagement = () => {
         </div>
       )}
 
-      {/* Filter */}
+      {/* Filters */}
       <Card>
-        <Select
-          placeholder="All Departments"
-          options={DEPARTMENTS}
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="w-48"
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            placeholder="Search products..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+          <Select
+            placeholder="All Departments"
+            options={DEPARTMENTS}
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+          />
+        </div>
       </Card>
 
       {/* Stock Table */}
@@ -253,6 +280,12 @@ const StockManagement = () => {
           data={stock}
           loading={loading}
           emptyMessage="No products found"
+        />
+        <Pagination
+          page={pagination.page}
+          pages={pagination.pages}
+          total={pagination.total}
+          onPageChange={(newPage) => setPagination({ ...pagination, page: newPage })}
         />
       </Card>
 
